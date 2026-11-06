@@ -1,7 +1,7 @@
 // Offline support: keeps the app, playlist and lyrics available, and always
 // prefers the newest copy from GitHub when there is a connection.
 // Song audio is streamed straight from GitHub and is not stored here.
-const CACHE = 'song-player-v1';
+const CACHE = 'song-player-v2';
 const SHELL = [
   './',
   './index.html',

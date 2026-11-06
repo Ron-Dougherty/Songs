@@ -64,6 +64,7 @@
   }
   .share-pill svg { width: 18px; height: 18px; }
   .c-title {
+    -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
     font-family: var(--serif);
     font-weight: 600;
     font-size: clamp(2.1rem, 9vw, 2.9rem);
@@ -102,6 +103,10 @@
     padding: 14px 16px; margin: 0 0 22px; color: var(--mist); font-size: .95rem; line-height: 1.5;
   }
   .edit-banner strong { color: var(--linen); }
+  .banner-off {
+    display: block; margin-top: 10px; min-height: 40px; padding: 0 16px; border-radius: 999px;
+    border: 1.5px solid var(--line); color: var(--linen); font-weight: 600; font-size: .92rem;
+  }
   .status { color: var(--mist); margin: 8px 0 0; line-height: 1.55; }
 
   .songs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
@@ -321,8 +326,9 @@
   </header>
 
   <div class="edit-banner" id="editBanner" hidden>
-    <strong>Editor view.</strong> Only this link shows the file checks under each song and the
-    <strong>Time the lyrics</strong> button. Share the regular link, without <strong>?edit</strong> at the end.
+    <strong>Editor view is on for this phone.</strong> Each song shows whether its files were found,
+    and the lyrics screen has a <strong>Time the lyrics</strong> button. Nobody else sees this.
+    <button class="banner-off" id="editOff" type="button">Turn off editor view</button>
   </div>
 
   <p class="status" id="status">Loading songs…</p>
@@ -401,17 +407,19 @@
 
   <div class="tm-result" id="tmResult" hidden>
     <h3>Timing done</h3>
-    <p>To share it, replace this song’s lyrics file on GitHub with the text below.</p>
+    <p>To share the timing, replace this song’s lyrics file on GitHub with the text below.</p>
     <textarea id="tmOut" readonly spellcheck="false" aria-label="Timed lyrics file"></textarea>
     <div class="tm-actions">
       <button class="btn btn-primary" id="tmCopy" type="button">Copy text</button>
       <button class="btn btn-ghost" id="tmDownload" type="button">Download file</button>
       <button class="btn btn-ghost" id="tmPreview" type="button">Preview on this phone</button>
+      <button class="btn btn-ghost" id="tmAgain" type="button">Time it again</button>
     </div>
     <ol class="tm-steps">
-      <li>On GitHub, open this file: <b id="tmFile"></b></li>
-      <li>Tap the pencil (Edit) button, select all the text, and paste over it.</li>
-      <li>Tap <b>Commit changes</b>. Everyone sees the new timing within a few minutes.</li>
+      <li>Tap <b>Copy text</b>.</li>
+      <li>On GitHub, open <b id="tmFile"></b> and tap the pencil icon to edit it.</li>
+      <li>Press and hold in the text, tap <b>Select all</b>, then <b>Paste</b>.</li>
+      <li>Tap <b>Commit changes</b>, then <b>Commit changes</b> again to confirm. Everyone sees the new timing within a few minutes.</li>
     </ol>
   </div>
 
@@ -434,14 +442,17 @@
 
   /* ---------- Setup ---------- */
   const SONG_DIR = 'songs/';
-  const EDIT = new URLSearchParams(location.search).has('edit');
+  const store0 = (() => { try { return localStorage.getItem('editor') === 'true'; } catch (e) { return false; } })();
+  const editInUrl = new URLSearchParams(location.search).has('edit');
+  let EDIT = editInUrl || store0;
+  if (editInUrl) { try { localStorage.setItem('editor', 'true'); } catch (e) { /* ignore */ } }
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = (id) => document.getElementById(id);
 
   const els = {
     home: $('home'), cTitle: $('cTitle'), cSub: $('cSub'), tabs: $('tabs'), status: $('status'), list: $('songs'),
     playAll: $('playAll'), shuffleAll: $('shuffleAll'), shareAll: $('shareAll'), installBtn: $('installBtn'),
-    editBanner: $('editBanner'), iosHint: $('iosHint'),
+    editBanner: $('editBanner'), editOff: $('editOff'), iosHint: $('iosHint'),
     mini: $('mini'), miniProg: $('miniProg'), miniOpen: $('miniOpen'), miniTitle: $('miniTitle'), miniPlay: $('miniPlay'),
     player: $('player'), pClose: $('pClose'), pCount: $('pCount'), pSize: $('pSize'), pShare: $('pShare'),
     pTitle: $('pTitle'), pRef: $('pRef'), pTime: $('pTime'), lyrics: $('lyrics'), lyricsInner: $('lyricsInner'),
@@ -450,7 +461,7 @@
     timing: $('timing'), tmClose: $('tmClose'), tmTitle: $('tmTitle'), tmCount: $('tmCount'),
     tmTapView: $('tmTapView'), tmHelp: $('tmHelp'), tmPrev: $('tmPrev'), tmNextLabel: $('tmNextLabel'),
     tmNext: $('tmNext'), tmAfter: $('tmAfter'), tmResult: $('tmResult'), tmOut: $('tmOut'),
-    tmCopy: $('tmCopy'), tmDownload: $('tmDownload'), tmPreview: $('tmPreview'), tmFile: $('tmFile'),
+    tmCopy: $('tmCopy'), tmDownload: $('tmDownload'), tmPreview: $('tmPreview'), tmAgain: $('tmAgain'), tmFile: $('tmFile'),
     tmBottom: $('tmBottom'), tmUndo: $('tmUndo'), tmRestart: $('tmRestart'), tmFinish: $('tmFinish'), tmTap: $('tmTap'),
     toast: $('toast'), audio: $('audio')
   };
@@ -480,7 +491,9 @@
     activeLine: -1,
     timedLines: [],
     userScrollUntil: 0,
-    errorsInARow: 0
+    errorsInARow: 0,
+    released: false,
+    resumeAt: 0
   };
 
   const fileUrl = (path) => SONG_DIR + path.split('/').map(encodeURIComponent).join('/');
@@ -801,6 +814,8 @@
   function loadSong(i) {
     const song = state.songs[i];
     state.current = i;
+    state.released = false;
+    state.resumeAt = 0;
     audio.src = fileUrl(songPath(song, song.audioFile));
     state.activeLine = -1;
     state.userScrollUntil = 0;
@@ -814,9 +829,70 @@
 
   function playIndex(i, open) {
     if (state.current !== i) loadSong(i);
+    playNow();
+    if (open) openPlayer();
+  }
+
+  /* ---------- Letting go when the app is closed or set aside ----------
+     Closing the app, or leaving it in the background while paused, unloads the
+     song and clears the lock-screen controls, so the phone has nothing to keep
+     running. Pressing play again picks up where it left off. */
+  const RELEASE_AFTER_MS = 30000;
+  let releaseTimer = 0;
+
+  function releaseAudio() {
+    clearTimeout(releaseTimer);
+    if (state.released || state.current < 0 || !audio.getAttribute('src')) return;
+    state.resumeAt = audio.currentTime || 0;
+    state.released = true;
+    audio.pause();
+    audio.removeAttribute('src');
+    try { audio.load(); } catch (e) { /* ignore */ }
+    if ('mediaSession' in navigator) {
+      try { navigator.mediaSession.metadata = null; } catch (e) { /* ignore */ }
+      try { navigator.mediaSession.playbackState = 'none'; } catch (e) { /* ignore */ }
+      try { navigator.mediaSession.setPositionState(); } catch (e) { /* ignore */ }
+    }
+    updatePlayButtons();
+    updateProgress();
+    updateWakeLock();
+  }
+
+  function scheduleRelease() {
+    clearTimeout(releaseTimer);
+    if (document.visibilityState !== 'hidden' || !audio.paused || state.released || state.current < 0) return;
+    releaseTimer = setTimeout(() => {
+      if (document.visibilityState === 'hidden' && audio.paused) releaseAudio();
+    }, RELEASE_AFTER_MS);
+  }
+
+  // Reload the current song after it was let go, ready at the saved spot.
+  function ensureLoaded() {
+    if (!state.released) return;
+    const song = cur();
+    if (!song) return;
+    const at = state.resumeAt || 0;
+    state.released = false;
+    audio.src = fileUrl(songPath(song, song.audioFile));
+    if (at > 0) {
+      audio.addEventListener('loadedmetadata', () => {
+        try { audio.currentTime = at; } catch (e) { /* ignore */ }
+      }, { once: true });
+    }
+    updateMediaSession();
+  }
+
+  function playNow() {
+    ensureLoaded();
     const p = audio.play();
     if (p && p.catch) p.catch(() => {});
-    if (open) openPlayer();
+  }
+
+  const posNow = () => (state.released ? state.resumeAt : audio.currentTime);
+  const durNow = () => (state.released ? ((cur() && cur().duration) || NaN) : audio.duration);
+  function setPos(t) {
+    if (state.released) state.resumeAt = t;
+    else audio.currentTime = t;
   }
 
   function startPlaylist(shuffle) {
@@ -835,7 +911,7 @@
       toast(EDIT ? 'Upload songs/' + song.dir + song.audioFile + ' to GitHub first.' : 'This song isn’t available yet.');
       return;
     }
-    if (state.current === i) { openPlayer(); if (audio.paused) audio.play().catch(() => {}); return; }
+    if (state.current === i) { openPlayer(); if (audio.paused) playNow(); return; }
     buildQueue(i);
     playIndex(i, true);
   }
@@ -845,7 +921,7 @@
     let p = state.qpos + 1;
     if (p >= state.queue.length) {
       if (!state.repeat) {
-        if (auto) { audio.pause(); audio.currentTime = 0; }
+        if (auto) { audio.pause(); setPos(0); }
         else toast('That’s the last song.');
         return;
       }
@@ -857,10 +933,10 @@
   }
 
   function prev() {
-    if (audio.currentTime > 3 || !state.queue.length) { audio.currentTime = 0; return; }
+    if (posNow() > 3 || !state.queue.length) { setPos(0); updateProgress(); return; }
     let p = state.qpos - 1;
     if (p < 0) {
-      if (!state.repeat) { audio.currentTime = 0; return; }
+      if (!state.repeat) { setPos(0); updateProgress(); return; }
       p = state.queue.length - 1;
     }
     state.qpos = p;
@@ -869,7 +945,7 @@
 
   function togglePlay() {
     if (state.current < 0) { startPlaylist(state.shuffle); return; }
-    if (audio.paused) audio.play().catch(() => {});
+    if (audio.paused) playNow();
     else audio.pause();
   }
 
@@ -890,13 +966,13 @@
     const label = playing ? 'Pause' : 'Play';
     els.bPlay.innerHTML = icon; els.bPlay.setAttribute('aria-label', label);
     els.miniPlay.innerHTML = icon; els.miniPlay.setAttribute('aria-label', label);
-    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+    if ('mediaSession' in navigator && !state.released) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
   }
 
   let seeking = false;
   let lastPositionState = 0;
   function updateProgress() {
-    const d = audio.duration, t = audio.currentTime;
+    const d = durNow(), t = posNow();
     const ok = isFinite(d) && d > 0;
     const pct = ok ? Math.min(100, (t / d) * 100) : 0;
     if (!seeking) {
@@ -909,7 +985,7 @@
     els.miniProg.style.width = pct + '%';
     els.player.style.setProperty('--glow', (0.1 + 0.42 * pct / 100).toFixed(3));
     const now = Date.now();
-    if (ok && 'mediaSession' in navigator && navigator.mediaSession.setPositionState && now - lastPositionState > 1000) {
+    if (ok && !state.released && 'mediaSession' in navigator && navigator.mediaSession.setPositionState && now - lastPositionState > 1000) {
       lastPositionState = now;
       try { navigator.mediaSession.setPositionState({ duration: d, playbackRate: audio.playbackRate || 1, position: Math.min(t, d) }); }
       catch (e) { /* ignore */ }
@@ -981,9 +1057,9 @@
         if (timed && it.time !== null) {
           state.timedLines.push({ t: it.time, el: p });
           p.addEventListener('click', () => {
-            audio.currentTime = Math.max(0, it.time - 0.05);
+            setPos(Math.max(0, it.time - 0.05));
             state.userScrollUntil = 0;
-            if (audio.paused) audio.play().catch(() => {});
+            if (audio.paused) playNow();
             syncLyrics(true);
           });
         }
@@ -1003,7 +1079,7 @@
   function syncLyrics(force) {
     const song = cur();
     if (!song || !song.lyrics) return;
-    const t = audio.currentTime;
+    const t = posNow();
     if (song.lyrics.timed) {
       const lines = state.timedLines;
       let idx = -1;
@@ -1020,7 +1096,7 @@
       }
     } else {
       if (Date.now() < state.userScrollUntil) return;
-      const d = audio.duration;
+      const d = durNow();
       if (!isFinite(d) || d <= 0) return;
       const box = els.lyrics;
       const max = box.scrollHeight - box.clientHeight;
@@ -1143,7 +1219,7 @@
     if (!('mediaSession' in navigator)) return;
     const ms = navigator.mediaSession;
     const set = (action, fn) => { try { ms.setActionHandler(action, fn); } catch (e) { /* unsupported */ } };
-    set('play', () => audio.play().catch(() => {}));
+    set('play', () => playNow());
     set('pause', () => audio.pause());
     set('previoustrack', () => prev());
     set('nexttrack', () => next(false));
@@ -1164,7 +1240,15 @@
   }
 
   /* ---------- Lyric timing tool (editor view only) ---------- */
-  const timing = { song: null, lines: [], pos: 0, started: false, done: false };
+  const timing = { song: null, lines: [], pos: 0, started: false, done: false, lastKey: null, lastText: '' };
+
+  function buildTimingLines(song) {
+    timing.song = song;
+    timing.lines = song.lyrics.items.filter((it) => it.type === 'line').map((it) => ({ item: it, text: it.text, t: null }));
+    timing.pos = 0;
+    timing.started = false;
+    timing.done = false;
+  }
 
   function openTiming() {
     const song = cur();
@@ -1172,15 +1256,25 @@
       toast('Add the lyrics file for this song first.');
       return;
     }
-    timing.song = song;
-    timing.lines = song.lyrics.items.filter((it) => it.type === 'line').map((it) => ({ item: it, text: it.text, t: null }));
-    timing.pos = 0;
-    timing.started = false;
-    timing.done = false;
+    buildTimingLines(song);
     audio.pause();
+    if (state.released) { state.resumeAt = 0; ensureLoaded(); }
     els.tmTitle.textContent = song.title;
+    // Coming back after a preview: show the finished text again.
+    if (timing.lastKey === song.key && timing.lastText) {
+      timing.done = true;
+      els.tmOut.value = timing.lastText;
+      els.tmFile.textContent = 'songs/' + song.dir + song.base + '.txt';
+    }
     renderTiming();
     pushPanel('timing');
+  }
+
+  function timingAgain() {
+    buildTimingLines(timing.song);
+    timing.lastKey = null;
+    timing.lastText = '';
+    renderTiming();
   }
 
   function renderTiming() {
@@ -1253,6 +1347,8 @@
     audio.pause();
     timing.done = true;
     els.tmOut.value = buildTimedText();
+    timing.lastKey = timing.song.key;
+    timing.lastText = els.tmOut.value;
     els.tmFile.textContent = 'songs/' + timing.song.dir + timing.song.base + '.txt';
     renderTiming();
   }
@@ -1279,14 +1375,37 @@
     closePanel('timing');
     if (song === cur()) {
       renderNowPlaying();
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
+      setPos(0);
+      playNow();
     }
-    toast('Previewing on this phone only. Upload the file to share it.');
+    toast('Preview only. Tap “Time the lyrics” to get back to the text.');
+  }
+
+  /* ---------- Editor view: tap the title 5 times, or open the address with ?edit ---------- */
+  function setEditor(on) {
+    EDIT = !!on;
+    try { localStorage.setItem('editor', String(EDIT)); } catch (e) { /* ignore */ }
+    if (!EDIT && /[?&]edit\b/.test(location.search)) {
+      try { history.replaceState(history.state, '', location.pathname + location.hash); } catch (e) { /* ignore */ }
+    }
+    els.editBanner.hidden = !EDIT;
+    els.pTime.hidden = !EDIT;
+    if (state.songs.length) renderList();
+    toast(EDIT ? 'Editor view on for this phone' : 'Editor view off');
+  }
+  let titleTaps = [];
+  function onTitleTap() {
+    const now = Date.now();
+    titleTaps = titleTaps.filter((t) => now - t < 3000);
+    titleTaps.push(now);
+    if (titleTaps.length >= 5) { titleTaps = []; setEditor(!EDIT); }
   }
 
   /* ---------- Wiring ---------- */
   function wire() {
+    els.cTitle.addEventListener('click', onTitleTap);
+    els.editOff.addEventListener('click', () => setEditor(false));
+    els.tmAgain.addEventListener('click', timingAgain);
     els.playAll.addEventListener('click', () => startPlaylist(false));
     els.shuffleAll.addEventListener('click', () => startPlaylist(true));
     els.shareAll.addEventListener('click', () => {
@@ -1332,7 +1451,7 @@
     els.seek.addEventListener('pointerdown', () => { seeking = true; });
     els.seek.addEventListener('input', () => {
       const v = parseFloat(els.seek.value);
-      if (isFinite(audio.duration)) audio.currentTime = v;
+      if (isFinite(durNow())) setPos(v);
       state.userScrollUntil = 0;
       updateProgress();
     });
@@ -1360,8 +1479,11 @@
       }
     });
 
-    audio.addEventListener('play', () => { updatePlayButtons(); updateWakeLock(); startFrames(); });
-    audio.addEventListener('pause', () => { updatePlayButtons(); updateWakeLock(); });
+    audio.addEventListener('play', () => { clearTimeout(releaseTimer); updatePlayButtons(); updateWakeLock(); startFrames(); });
+    audio.addEventListener('pause', () => { updatePlayButtons(); updateWakeLock(); scheduleRelease(); });
+    document.addEventListener('visibilitychange', scheduleRelease);
+    window.addEventListener('pagehide', releaseAudio);   // the app is being closed
+    document.addEventListener('freeze', releaseAudio);   // the phone is putting it to sleep
     audio.addEventListener('playing', () => { state.errorsInARow = 0; });
     audio.addEventListener('timeupdate', updateProgress);
     audio.addEventListener('loadedmetadata', () => {
