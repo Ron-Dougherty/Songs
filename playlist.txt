@@ -1,0 +1,37 @@
+# ------------------------------------------------------------
+# PLAYLIST
+# Lines starting with # are notes for you. They never show in the app.
+# ------------------------------------------------------------
+
+# The name at the top of the app, a short line under it,
+# and the artist name shown on the lock screen.
+Title: Musical Expressions
+Subtitle: Original songs, with the lyrics on screen
+Artist:
+
+# ------------------------------------------------------------
+# FOLDERS
+# A name in square brackets starts a folder. It shows as its own tab
+# in the app, and its songs live in a folder with the same name
+# inside "songs". For example, the songs under [Worship] are in:
+#   songs/Worship/Ordinary Ground.mp3   (the audio from Suno)
+#   songs/Worship/Ordinary Ground.txt   (the lyrics)
+#
+# Names must match the files exactly, including capital letters and spaces.
+# List the songs one per line, in the order they play.
+# To hide a song for now, put a # in front of it.
+# To add another folder, add a new [Name] line with its songs under it.
+# ------------------------------------------------------------
+
+[Worship]
+Ordinary Ground
+Think on These Things
+
+[Devotional]
+# List devotional songs here. Their files go in songs/Devotional/
+
+[Other Songs]
+# List other songs here. Their files go in songs/Other Songs/
+
+# A folder's tab appears in the app once at least one song is listed under it.
+# The tabs show in the same order as the folders here; move a whole block to reorder them.
