@@ -1,0 +1,9 @@
+Title: Ordinary Ground
+Scripture: Isaiah 40:28-31
+
+# Paste the lyrics below these notes. You can copy them from the song's page in Suno.
+# Tags like [Verse 1], [Chorus] and [Bridge] are fine. They show as small labels.
+# Leave a blank line between sections.
+# Optional: add a line near the top like  Note: A few words about this song
+# and it will show above the lyrics.
+# Lines starting with # never show in the app.
