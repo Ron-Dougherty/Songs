@@ -25,3 +25,5 @@ The Last Thing
 We Are Home
 
 [Covers]
+Test 1
+Test 2
