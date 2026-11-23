@@ -86,6 +86,14 @@
     flex: 1 1 0; min-width: 0; min-height: 42px; padding: 0 8px; border: 0;
     font-size: .95rem; line-height: 1.15; white-space: normal;
   }
+  /* Four or more folders: equal-size buttons in two even rows */
+  .tabs.grid {
+    display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+    grid-auto-rows: 1fr; gap: 8px;
+  }
+  .tabs.grid .tab {
+    width: 100%; min-width: 0; padding: 6px 10px; white-space: normal; line-height: 1.15;
+  }
   .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 28px; }
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -666,7 +674,10 @@
     els.tabs.innerHTML = '';
     els.tabs.hidden = state.sections.length < 2;
     if (els.tabs.hidden) return;
-    els.tabs.classList.toggle('segmented', state.sections.length <= 3);
+    const n = state.sections.length;
+    els.tabs.classList.toggle('segmented', n <= 3);
+    els.tabs.classList.toggle('grid', n > 3);
+    els.tabs.style.setProperty('--cols', String(Math.min(3, Math.ceil(n / 2))));
     state.sections.forEach((sec, i) => {
       const b = document.createElement('button');
       b.type = 'button';
