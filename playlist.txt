@@ -1,4 +1,5 @@
 [Worship]
+A New Song
 El Elyon
 Hallelu Yahweh
 I Am Thine
@@ -8,6 +9,7 @@ You Are Holy
 Your Will Be Done
 
 [Devotional]
+Anyway
 But the Bible Says More
 Ordinary Ground
 Planted By the Water
